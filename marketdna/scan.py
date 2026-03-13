@@ -109,7 +109,7 @@ def scan(*tickers: str, start: str = "2010-01-01") -> DNAReport | list[DNAReport
 def scan_deep(
     ticker: str,
     start: str = "2010-01-01",
-    n_regimes: int = 3,
+    n_regimes: int = 2,
     target_vol: float = 0.10,
 ) -> dict:
     """深度扫描：基础DNA + Regime检测 + Vol Timing信号
@@ -143,7 +143,7 @@ def scan_pair_deep(
     ticker_a: str,
     ticker_b: str,
     start: str = "2010-01-01",
-    n_regimes: int = 3,
+    n_regimes: int = 2,
 ) -> dict:
     """深度配对扫描：基础DNA + 配对分析 + 配对交易信号 + Regime
 
