@@ -121,8 +121,19 @@ def generate_pair_signal(
         positions.iloc[i] = in_position
 
     # 计算策略收益
-    # spread收益 = Δspread / spread_std（标准化后的变化）
-    spread_ret = spread.pct_change().loc[positions.index]
+    # 正确方式：用底层资产的 log return，按 capital-weighted 计算
+    # 做多 spread = 做多 $w_a 的 A + 做空 $w_b 的 B
+    # 总资本 = $1，其中 w_a = 1/(1+|β|), w_b = |β|/(1+|β|)
+    # 策略收益 = w_a * ret_a - w_b * ret_b
+    abs_beta = abs(beta)
+    w_a = 1.0 / (1.0 + abs_beta)
+    w_b = abs_beta / (1.0 + abs_beta)
+
+    # 对齐 returns 到 positions 的 index
+    ra = returns_a.reindex(positions.index).fillna(0)
+    rb = returns_b.reindex(positions.index).fillna(0)
+
+    spread_ret = w_a * ra - w_b * rb  # 单位资本下的 spread 收益
     strategy_ret = (positions.shift(1) * spread_ret).dropna()
     strategy_ret.name = "strategy_return"
 
