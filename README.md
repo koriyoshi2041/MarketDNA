@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/tests-26%20passed-brightgreen?style=flat-square&logo=pytest&logoColor=white" alt="Tests: 26 passed">
+  <img src="https://img.shields.io/badge/tests-27%20passed-brightgreen?style=flat-square&logo=pytest&logoColor=white" alt="Tests: 27 passed">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT">
   <img src="https://img.shields.io/badge/GARCH-volatility-orange?style=flat-square" alt="GARCH">
   <img src="https://img.shields.io/badge/HMM-regime%20detection-purple?style=flat-square" alt="HMM">
@@ -30,7 +30,7 @@ Instead of plotting candlestick charts and guessing, MarketDNA runs a rigorous b
 | **Distribution Analysis** | Fat-tail detection, normality tests, Student-t fit | SPY has 5.1x more 3σ events than normal predicts |
 | **Volatility Modeling** | GARCH(1,1), clustering detection, leverage effect | SPY vol shock half-life ≈ 21 days |
 | **Pair Analysis** | Correlation, cointegration, spread dynamics | GLD/GDX: high corr (0.77) but NOT cointegrated |
-| **Regime Detection** | Hidden Markov Model state identification | 3 regimes: calm (+35% ann.), choppy (+15%), panic (-48%) |
+| **Regime Detection** | Hidden Markov Model state identification | 2 regimes: calm (+26% ann., 136d avg) vs choppy (-37%, 40d avg) |
 | **RMT Denoising** | Marchenko-Pastur noise filtering | 43% of correlation matrix is pure noise |
 | **Signal Generation** | Vol timing + pair trading backtests | Vol timing: max drawdown -35.7% → -14.7% |
 
@@ -60,7 +60,7 @@ Instead of plotting candlestick charts and guessing, MarketDNA runs a rigorous b
   <img src="output/spy_regime.png" width="85%" alt="SPY Regime Timeline — HMM 3-state detection">
 </p>
 
-> Three hidden states detected: **calm** (green, +35% annualized), **choppy** (yellow, +15%), and **panic** (red, -48%). The 2020 COVID crash and 2022 bear market are clearly captured as panic regimes.
+> Two hidden states detected: **Calm** (teal, +26% annualized, avg 136 days) and **Choppy** (gold, -37%, avg 40 days). The 2020 COVID crash, 2022 bear market, and late-2025 volatility spike are clearly captured. Regime smoothing (min 3 days) prevents unrealistic 1-day oscillations.
 
 ### ⚡ Volatility Timing Strategy (GARCH)
 
@@ -235,7 +235,7 @@ MarketDNA/
 
 ## Testing
 
-All 26 tests use **synthetic data** (no network dependency) to verify statistical correctness:
+All 27 tests use **synthetic data** (no network dependency) to verify statistical correctness:
 
 ```
 $ python -m pytest marketdna/tests/test_core.py -v
@@ -254,6 +254,7 @@ TestCorrelation::test_non_cointegrated          PASSED
 TestRegime::test_regime_detection               PASSED
 TestRegime::test_three_regimes                  PASSED
 TestRegime::test_regime_labels_aligned          PASSED
+TestRegime::test_smoothing_removes_short_segments PASSED
 TestRMT::test_rmt_basic                         PASSED
 TestRMT::test_denoised_condition_improves       PASSED
 TestRMT::test_mp_bounds                         PASSED
@@ -267,7 +268,7 @@ TestViz::test_plot_qq_no_crash                  PASSED
 TestViz::test_plot_distribution_no_crash        PASSED
 TestViz::test_plot_dashboard_no_crash           PASSED
 
-======================== 26 passed in 25.91s ========================
+======================== 27 passed in 2.58s =========================
 ```
 
 ---
