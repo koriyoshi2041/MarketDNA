@@ -75,7 +75,7 @@ def demo_regime(data):
     from marketdna.analysis.regime import analyze_regime, print_regime
     from marketdna.viz.plots import plot_regime_timeline
 
-    regime = analyze_regime(data.log_returns, "SPY", n_regimes=3)
+    regime = analyze_regime(data.log_returns, "SPY", n_regimes=2)
     print_regime(regime)
 
     plot_regime_timeline(

@@ -177,7 +177,7 @@ class TestRegime:
     def test_regime_detection(self):
         from marketdna.analysis.regime import analyze_regime
         r = _make_returns(n=500)
-        rf = analyze_regime(r, "SYN", n_regimes=2)
+        rf = analyze_regime(r, "SYN", n_regimes=2, min_regime_days=1)
         assert rf.n_regimes == 2
         assert len(rf.regime_means) == 2
         assert len(rf.regime_vols) == 2
@@ -186,7 +186,7 @@ class TestRegime:
 
     def test_three_regimes(self):
         from marketdna.analysis.regime import analyze_regime
-        # 构造有三个明显 regime 的数据
+        # Construct data with 3 clear regimes
         rng = np.random.default_rng(42)
         low_vol = rng.normal(0.001, 0.005, 200)
         high_vol = rng.normal(-0.001, 0.03, 200)
@@ -194,16 +194,27 @@ class TestRegime:
         combined = np.concatenate([low_vol, high_vol, mid_vol])
         dates = pd.bdate_range("2020-01-01", periods=len(combined))
         r = pd.Series(combined, index=dates)
-        rf = analyze_regime(r, "3REG", n_regimes=3)
+        rf = analyze_regime(r, "3REG", n_regimes=3, min_regime_days=1)
         assert rf.n_regimes == 3
         assert len(rf.regime_names) == 3
 
     def test_regime_labels_aligned(self):
         from marketdna.analysis.regime import analyze_regime
         r = _make_returns(n=500)
-        rf = analyze_regime(r, "SYN", n_regimes=2)
+        rf = analyze_regime(r, "SYN", n_regimes=2, min_regime_days=1)
         assert len(rf.regime_labels) == len(r.dropna())
         assert rf.regime_probs.shape[1] == 2
+
+    def test_smoothing_removes_short_segments(self):
+        """Smoothing should prevent 1-day regime flickers"""
+        from marketdna.analysis.regime import analyze_regime
+        r = _make_returns(n=1000)
+        rf_raw = analyze_regime(r, "SYN", n_regimes=2, min_regime_days=1)
+        rf_smooth = analyze_regime(r, "SYN", n_regimes=2, min_regime_days=5)
+        # Smoothed version should have fewer regime switches
+        raw_switches = (rf_raw.regime_labels.diff().abs() > 0).sum()
+        smooth_switches = (rf_smooth.regime_labels.diff().abs() > 0).sum()
+        assert smooth_switches <= raw_switches
 
 
 # ---------------------------------------------------------------------------

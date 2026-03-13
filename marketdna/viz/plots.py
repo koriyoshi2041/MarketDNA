@@ -68,9 +68,15 @@ def plot_qq(returns: pd.Series, ticker: str = "", save_path: str | None = None) 
 
     (theoretical, sample), (slope, intercept, _) = stats.probplot(r, dist="norm")
 
-    ax.scatter(theoretical, sample, s=8, alpha=0.5, color=COLORS["primary"], zorder=2)
+    # Size points by distance from the reference line — tails get bigger
+    expected = slope * theoretical + intercept
+    deviation = np.abs(sample - expected)
+    sizes = 6 + 80 * (deviation / (deviation.max() + 1e-9))
 
-    # 参考线
+    ax.scatter(theoretical, sample, s=sizes, alpha=0.6, color=COLORS["primary"],
+               edgecolors="white", linewidths=0.3, zorder=2)
+
+    # Reference line
     x_line = np.array([theoretical.min(), theoretical.max()])
     ax.plot(x_line, slope * x_line + intercept, "--", color=COLORS["secondary"], linewidth=1.5, label="Normal ref")
 
@@ -178,26 +184,17 @@ def plot_spread(
     ax1.set_title(f"{ticker_a}/{ticker_b} Pair Trading Spread & Z-Score")
     ax1.grid(True, alpha=0.3)
 
-    # 下图：Z-Score + 阈值
-    ax2.plot(zscore.index, zscore.values, color=COLORS["accent"], linewidth=0.8)
-    ax2.axhline(entry_z, color=COLORS["secondary"], linestyle="--", alpha=0.7, label=f"Entry +{entry_z}")
-    ax2.axhline(-entry_z, color=COLORS["secondary"], linestyle="--", alpha=0.7, label=f"Entry -{entry_z}")
-    ax2.axhline(exit_z, color=COLORS["warn"], linestyle=":", alpha=0.5)
-    ax2.axhline(-exit_z, color=COLORS["warn"], linestyle=":", alpha=0.5)
+    # Lower panel: Z-Score with thresholds (simplified — no position shading to reduce clutter)
+    ax2.fill_between(zscore.index, 0, zscore.values,
+                     where=zscore.values > entry_z, alpha=0.3,
+                     color=COLORS["secondary"], label=f"Short zone (z>{entry_z})")
+    ax2.fill_between(zscore.index, 0, zscore.values,
+                     where=zscore.values < -entry_z, alpha=0.3,
+                     color=COLORS["primary"], label=f"Long zone (z<-{entry_z})")
+    ax2.plot(zscore.index, zscore.values, color=COLORS["accent"], linewidth=0.6, alpha=0.8)
+    ax2.axhline(entry_z, color=COLORS["secondary"], linestyle="--", alpha=0.5)
+    ax2.axhline(-entry_z, color=COLORS["secondary"], linestyle="--", alpha=0.5)
     ax2.axhline(0, color=COLORS["neutral"], linestyle="-", alpha=0.3)
-
-    # 标注持仓区域
-    if positions is not None:
-        long_mask = positions > 0
-        short_mask = positions < 0
-        if long_mask.any():
-            ax2.fill_between(zscore.index, zscore.min(), zscore.max(),
-                           where=long_mask.reindex(zscore.index, fill_value=False),
-                           alpha=0.1, color=COLORS["primary"], label="Long spread")
-        if short_mask.any():
-            ax2.fill_between(zscore.index, zscore.min(), zscore.max(),
-                           where=short_mask.reindex(zscore.index, fill_value=False),
-                           alpha=0.1, color=COLORS["secondary"], label="Short spread")
 
     ax2.set_ylabel("Z-Score")
     ax2.set_xlabel("Date")
@@ -380,7 +377,11 @@ def plot_full_dashboard(
     # (0,1) QQ-Plot
     ax = axes[0, 1]
     (theoretical, sample), (slope, intercept, _) = stats.probplot(r.values, dist="norm")
-    ax.scatter(theoretical, sample, s=5, alpha=0.4, color=COLORS["primary"])
+    expected = slope * theoretical + intercept
+    dev = np.abs(sample - expected)
+    sizes = 4 + 60 * (dev / (dev.max() + 1e-9))
+    ax.scatter(theoretical, sample, s=sizes, alpha=0.5, color=COLORS["primary"],
+               edgecolors="white", linewidths=0.2)
     x_line = np.array([theoretical.min(), theoretical.max()])
     ax.plot(x_line, slope * x_line + intercept, "--", color=COLORS["secondary"], linewidth=1.5)
     ax.set_title("QQ-Plot vs Normal")

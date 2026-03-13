@@ -52,36 +52,71 @@ class RegimeFingerprint:
 
     @property
     def regime_names(self) -> list[str]:
-        """根据波动率大小给 regime 起名字"""
+        """Name each regime by volatility rank"""
         vol_order = np.argsort(self.regime_vols)
         names = [""] * self.n_regimes
-        labels = ["低波平静", "中波震荡", "高波恐慌", "极端危机"]
+        labels = ["Calm", "Choppy", "Panic", "Crisis"]
         for rank, idx in enumerate(vol_order):
             name_idx = min(rank, len(labels) - 1)
             names[idx] = labels[name_idx]
         return names
 
 
+def _smooth_labels(labels: np.ndarray, min_duration: int = 5) -> np.ndarray:
+    """Smooth regime labels by removing short-lived segments.
+
+    Single-pass: identify all segments, then replace any segment
+    shorter than min_duration with its left neighbor's label.
+    """
+    smoothed = labels.copy()
+    n = len(smoothed)
+
+    # Step 1: identify segment boundaries on the original labels
+    segments: list[tuple[int, int, int]] = []  # (start, end, label)
+    i = 0
+    while i < n:
+        j = i + 1
+        while j < n and smoothed[j] == smoothed[i]:
+            j += 1
+        segments.append((i, j, int(smoothed[i])))
+        i = j
+
+    # Step 2: merge short segments into the previous segment
+    for idx in range(1, len(segments)):
+        start, end, val = segments[idx]
+        if (end - start) < min_duration:
+            prev_val = segments[idx - 1][2]
+            smoothed[start:end] = prev_val
+            # Update this segment's label so subsequent merges chain correctly
+            segments[idx] = (start, end, prev_val)
+
+    return smoothed
+
+
 def analyze_regime(
     returns: pd.Series,
     ticker: str = "",
-    n_regimes: int = 3,
+    n_regimes: int = 2,
+    min_regime_days: int = 3,
 ) -> RegimeFingerprint:
-    """用 HMM 检测市场 regime
+    """Detect market regimes using Hidden Markov Model
 
     Parameters
     ----------
     returns : pd.Series
-        日度 log 收益率
+        Daily log returns
     n_regimes : int
-        假设的状态数量（2=牛/熊，3=牛/震荡/熊，推荐3）
+        Number of hidden states (2=bull/bear, 3=bull/choppy/bear)
+    min_regime_days : int
+        Minimum regime duration in days. Shorter segments are merged
+        into the previous regime to prevent unrealistic oscillations.
     """
     from hmmlearn.hmm import GaussianHMM
 
     r = returns.dropna()
     X = r.values.reshape(-1, 1)
 
-    # 训练 HMM
+    # Train HMM
     model = GaussianHMM(
         n_components=n_regimes,
         covariance_type="full",
@@ -90,9 +125,13 @@ def analyze_regime(
     )
     model.fit(X)
 
-    # 预测每天的状态
+    # Predict states
     labels = model.predict(X)
     probs = model.predict_proba(X)
+
+    # Smooth out short-lived regime flickers
+    if min_regime_days > 1:
+        labels = _smooth_labels(labels, min_duration=min_regime_days)
 
     # 提取每个 regime 的参数
     means_daily = model.means_.flatten()
@@ -141,29 +180,29 @@ def analyze_regime(
 
 
 def print_regime(rf: RegimeFingerprint) -> None:
-    """人话版 regime 报告"""
+    """Human-readable regime report"""
 
     print(f"\n{'='*60}")
-    print(f"  🎭 {rf.ticker} Regime 指纹 ({rf.n_regimes}个状态)")
+    print(f"  Regime Fingerprint: {rf.ticker} ({rf.n_regimes} states)")
     print(f"{'='*60}")
 
     names = rf.regime_names
     for i in range(rf.n_regimes):
         pct_time = float((rf.regime_labels == i).mean() * 100)
         print(f"\n  Regime {i}: {names[i]}")
-        print(f"    年化收益:  {rf.regime_means[i]:+.1%}")
-        print(f"    年化波动:  {rf.regime_vols[i]:.1%}")
-        print(f"    平均持续:  {rf.regime_durations[i]:.0f} 天")
-        print(f"    时间占比:  {pct_time:.1f}%")
+        print(f"    Ann. Return:   {rf.regime_means[i]:+.1%}")
+        print(f"    Ann. Vol:      {rf.regime_vols[i]:.1%}")
+        print(f"    Avg Duration:  {rf.regime_durations[i]:.0f} days")
+        print(f"    Time Share:    {pct_time:.1f}%")
 
-    print(f"\n  转移概率矩阵:")
+    print(f"\n  Transition Matrix:")
     for i in range(rf.n_regimes):
-        row = "    " + " → ".join(
+        row = " -> ".join(
             f"{rf.transition_matrix[i, j]:.2%}" for j in range(rf.n_regimes)
         )
-        print(f"    从 {names[i]}: {row}")
+        print(f"    {names[i]:>8s}: {row}")
 
     cur = rf.current_regime
-    print(f"\n  📍 当前状态: Regime {cur} ({names[cur]})")
-    print(f"     置信度:   {rf.current_regime_prob:.1%}")
+    print(f"\n  Current State: Regime {cur} ({names[cur]})")
+    print(f"  Confidence:    {rf.current_regime_prob:.1%}")
     print(f"{'='*60}\n")
