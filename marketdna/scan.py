@@ -112,14 +112,16 @@ def scan_deep(
     n_regimes: int = 2,
     target_vol: float = 0.10,
 ) -> dict:
-    """深度扫描：基础DNA + Regime检测 + Vol Timing信号
+    """深度扫描：基础DNA + Regime检测 + Vol Timing + Regime Vol Timing + Walk-Forward
 
     Returns
     -------
-    dict with keys: 'report', 'regime', 'vol_timing'
+    dict with keys: 'report', 'regime', 'vol_timing', 'regime_vol_timing', 'walk_forward'
     """
     from marketdna.analysis.regime import analyze_regime, print_regime
     from marketdna.signals.vol_timing import generate_vol_timing, print_vol_timing
+    from marketdna.signals.regime_vol_timing import generate_regime_vol_timing, print_regime_vol_timing
+    from marketdna.validation.walk_forward import walk_forward_vol_timing, print_walk_forward
 
     report = scan_single(ticker, start)
 
@@ -132,10 +134,20 @@ def scan_deep(
     vol_timing = generate_vol_timing(report.data.log_returns, ticker, target_vol=target_vol)
     print_vol_timing(vol_timing)
 
+    regime_vt = generate_regime_vol_timing(
+        report.data.log_returns, ticker, target_vol=target_vol, n_regimes=n_regimes,
+    )
+    print_regime_vol_timing(regime_vt)
+
+    wf = walk_forward_vol_timing(report.data.log_returns, ticker, target_vol=target_vol)
+    print_walk_forward(wf)
+
     return {
         "report": report,
         "regime": regime,
         "vol_timing": vol_timing,
+        "regime_vol_timing": regime_vt,
+        "walk_forward": wf,
     }
 
 
@@ -145,14 +157,17 @@ def scan_pair_deep(
     start: str = "2010-01-01",
     n_regimes: int = 2,
 ) -> dict:
-    """深度配对扫描：基础DNA + 配对分析 + 配对交易信号 + Regime
+    """深度配对扫描：基础DNA + 协整验证 + 配对交易信号 + Regime + Walk-Forward
 
     Returns
     -------
-    dict with keys: 'pair_report', 'regime_a', 'regime_b', 'pair_signal'
+    dict with keys: 'pair_report', 'regime_a', 'coint_validation',
+                    'pair_signal', 'walk_forward'
     """
     from marketdna.analysis.regime import analyze_regime, print_regime
     from marketdna.signals.mean_reversion import generate_pair_signal, print_pair_trading
+    from marketdna.validation.cointegration_validator import validate_cointegration, print_cointegration_report
+    from marketdna.validation.walk_forward import walk_forward_pair_trading, print_walk_forward
 
     pair_report = scan(ticker_a, ticker_b, start=start)
 
@@ -163,10 +178,14 @@ def scan_pair_deep(
     regime_a = analyze_regime(pair_report.report_a.data.log_returns, ticker_a, n_regimes)
     print_regime(regime_a)
 
-    # 配对交易信号
+    # 协整验证
     adj_a = _get_adj_close(pair_report.report_a.data)
     adj_b = _get_adj_close(pair_report.report_b.data)
 
+    coint_report = validate_cointegration(adj_a, adj_b, ticker_a, ticker_b)
+    print_cointegration_report(coint_report)
+
+    # 配对交易信号
     pair_signal = generate_pair_signal(
         adj_a, adj_b,
         pair_report.report_a.data.log_returns,
@@ -175,8 +194,19 @@ def scan_pair_deep(
     )
     print_pair_trading(pair_signal)
 
+    # Walk-forward 验证
+    wf = walk_forward_pair_trading(
+        adj_a, adj_b,
+        pair_report.report_a.data.log_returns,
+        pair_report.report_b.data.log_returns,
+        ticker_a, ticker_b,
+    )
+    print_walk_forward(wf)
+
     return {
         "pair_report": pair_report,
         "regime_a": regime_a,
+        "coint_validation": coint_report,
         "pair_signal": pair_signal,
+        "walk_forward": wf,
     }

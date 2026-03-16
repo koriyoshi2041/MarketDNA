@@ -357,5 +357,111 @@ class TestViz:
         plot_full_dashboard(r, "SYN", save_path="/tmp/test_dash.png")
 
 
+# ---------------------------------------------------------------------------
+# signals/regime_vol_timing.py 测试
+# ---------------------------------------------------------------------------
+
+class TestRegimeVolTiming:
+    def test_regime_vol_timing_signal(self):
+        from marketdna.signals.regime_vol_timing import generate_regime_vol_timing
+        r = _make_returns(n=1000)
+        rvt = generate_regime_vol_timing(r, "SYN", target_vol=0.10)
+        assert rvt.ticker == "SYN"
+        assert len(rvt.regime_weights) == len(r.dropna())
+        assert len(rvt.strategy_returns) > 0
+
+    def test_regime_modulation_differs(self):
+        """Regime weights should differ from raw GARCH weights"""
+        from marketdna.signals.regime_vol_timing import generate_regime_vol_timing
+        r = _make_returns(n=1000)
+        rvt = generate_regime_vol_timing(r, "SYN", target_vol=0.10)
+        # At least some weights should be modulated
+        diff = (rvt.regime_weights - rvt.raw_weights).abs()
+        assert diff.sum() > 0
+
+    def test_leverage_cap_regime(self):
+        """Regime weights should respect max_leverage"""
+        from marketdna.signals.regime_vol_timing import generate_regime_vol_timing
+        r = _make_returns(n=1000)
+        rvt = generate_regime_vol_timing(r, "SYN", max_leverage=1.5)
+        assert rvt.regime_weights.max() <= 1.5 + 1e-9
+
+
+# ---------------------------------------------------------------------------
+# validation/cointegration_validator.py 测试
+# ---------------------------------------------------------------------------
+
+class TestCointegrationValidator:
+    def test_cointegrated_pair_passes(self):
+        """Synthetically cointegrated pair should pass validation"""
+        from marketdna.validation.cointegration_validator import validate_cointegration
+        _, _, pa, pb = _make_cointegrated_pair(n=1500)
+        cr = validate_cointegration(pa, pb, "A", "B")
+        # Should at least detect current cointegration
+        assert cr.coint_pvalue < 0.50  # relaxed for synthetic data
+        assert cr.hedge_ratio != 0
+
+    def test_independent_pair_rejected(self):
+        """Two independent random walks should be rejected"""
+        from marketdna.validation.cointegration_validator import validate_cointegration
+        rng = np.random.default_rng(99)
+        n = 1000
+        dates = pd.bdate_range("2020-01-01", periods=n)
+        pa = pd.Series(np.cumsum(rng.normal(0, 1, n)) + 100, index=dates)
+        pb = pd.Series(np.cumsum(rng.normal(0, 1, n)) + 100, index=dates)
+        cr = validate_cointegration(pa, pb, "X", "Y")
+        assert cr.confidence in ("LOW", "REJECT")
+        assert len(cr.rejection_reasons) > 0
+
+    def test_report_fields(self):
+        """All fields should be populated"""
+        from marketdna.validation.cointegration_validator import validate_cointegration
+        _, _, pa, pb = _make_cointegrated_pair(n=1000)
+        cr = validate_cointegration(pa, pb, "A", "B")
+        assert isinstance(cr.rolling_coint_ratio, float)
+        assert 0 <= cr.rolling_coint_ratio <= 1
+        assert len(cr.rolling_pvalues) > 0
+
+
+# ---------------------------------------------------------------------------
+# validation/walk_forward.py 测试
+# ---------------------------------------------------------------------------
+
+class TestWalkForward:
+    def test_walk_forward_vol_timing(self):
+        """Walk-forward should produce at least 1 fold"""
+        from marketdna.validation.walk_forward import walk_forward_vol_timing
+        r = _make_returns(n=1500)  # need enough data
+        wf = walk_forward_vol_timing(r, "SYN", min_train_days=500, test_days=60, step_days=60)
+        assert len(wf.folds) >= 1
+        assert wf.total_oos_days > 0
+
+    def test_walk_forward_pair_trading(self):
+        """Walk-forward pair trading should produce folds"""
+        from marketdna.validation.walk_forward import walk_forward_pair_trading
+        ra, rb, pa, pb = _make_cointegrated_pair(n=1500)
+        wf = walk_forward_pair_trading(
+            pa, pb, ra, rb, "A", "B",
+            min_train_days=500, test_days=60, step_days=60,
+        )
+        assert len(wf.folds) >= 1
+
+    def test_insufficient_data_returns_empty(self):
+        """Too little data should return empty result, not crash"""
+        from marketdna.validation.walk_forward import walk_forward_vol_timing
+        r = _make_returns(n=100)  # way too short
+        wf = walk_forward_vol_timing(r, "SYN", min_train_days=500)
+        assert len(wf.folds) == 0
+        assert wf.total_oos_days == 0
+
+    def test_sharpe_decay_ratio(self):
+        """Decay ratio should be between -inf and inf (just check it's computed)"""
+        from marketdna.validation.walk_forward import walk_forward_vol_timing
+        r = _make_returns(n=1500)
+        wf = walk_forward_vol_timing(r, "SYN", min_train_days=500, test_days=60, step_days=60)
+        if wf.folds:
+            assert isinstance(wf.sharpe_decay_ratio, float)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

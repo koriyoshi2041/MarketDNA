@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/tests-27%20passed-brightgreen?style=flat-square&logo=pytest&logoColor=white" alt="Tests: 27 passed">
+  <img src="https://img.shields.io/badge/tests-37%20passed-brightgreen?style=flat-square&logo=pytest&logoColor=white" alt="Tests: 37 passed">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT">
   <img src="https://img.shields.io/badge/GARCH-volatility-orange?style=flat-square" alt="GARCH">
   <img src="https://img.shields.io/badge/HMM-regime%20detection-purple?style=flat-square" alt="HMM">
@@ -33,6 +33,9 @@ Instead of plotting candlestick charts and guessing, MarketDNA runs a rigorous b
 | **Regime Detection** | Hidden Markov Model state identification | 2 regimes: calm (+26% ann., 136d avg) vs choppy (-37%, 40d avg) |
 | **RMT Denoising** | Marchenko-Pastur noise filtering | 43% of correlation matrix is pure noise |
 | **Signal Generation** | Vol timing + pair trading backtests | Vol timing: max drawdown -35.7% → -14.7% |
+| **Regime+GARCH Fusion** | HMM-modulated position sizing | Proactive regime-aware vol targeting |
+| **Walk-Forward Validation** | Expanding window OOS backtesting | Overfitting detection with Sharpe decay |
+| **Cointegration Validator** | Rolling stability + spread stationarity | Screen pairs before deploying capital |
 
 ---
 
@@ -137,11 +140,15 @@ MarketDNA/
 │   │   └── rmt.py                   # Random Matrix Theory denoising
 │   ├── signals/
 │   │   ├── vol_timing.py            # GARCH-based volatility targeting
-│   │   └── mean_reversion.py        # Z-score pair trading strategy
+│   │   ├── mean_reversion.py        # Z-score pair trading strategy
+│   │   └── regime_vol_timing.py     # HMM + GARCH fusion strategy
+│   ├── validation/
+│   │   ├── walk_forward.py          # Walk-forward OOS backtesting
+│   │   └── cointegration_validator.py # Rolling cointegration screening
 │   ├── viz/
 │   │   └── plots.py                 # 8 publication-quality chart types
 │   ├── tests/
-│   │   └── test_core.py             # 26 unit tests with synthetic data
+│   │   └── test_core.py             # 37 unit tests with synthetic data
 │   └── scan.py                      # Main entry point
 ├── run_demo.py                      # Full demonstration script
 ├── output/                          # Generated charts
@@ -188,9 +195,16 @@ MarketDNA/
 
 ### ⚡ Trading Signals
 - **Vol Timing**: σ_target / σ_predicted position sizing
+- **Regime+GARCH Fusion**: HMM regime multiplier × GARCH vol targeting
 - **Pair Trading**: Z-score entry/exit with stop-loss
 - **Look-ahead bias prevention**: all signals use `shift(1)`
 - Full backtest metrics: Sharpe, max drawdown, win rate
+
+### ✅ Validation Framework
+- **Walk-Forward Validation**: expanding window with quarterly OOS periods
+- **Sharpe Decay Ratio**: OOS/IS Sharpe measures overfitting
+- **Cointegration Validator**: rolling stability, ADF, half-life screening
+- **Confidence scoring**: HIGH/MEDIUM/LOW/REJECT for pair candidates
 
 ---
 
@@ -235,7 +249,7 @@ MarketDNA/
 
 ## Testing
 
-All 27 tests use **synthetic data** (no network dependency) to verify statistical correctness:
+All 37 tests use **synthetic data** (no network dependency) to verify statistical correctness:
 
 ```
 $ python -m pytest marketdna/tests/test_core.py -v
@@ -267,8 +281,18 @@ TestMeanReversion::test_hedge_ratio_reasonable  PASSED
 TestViz::test_plot_qq_no_crash                  PASSED
 TestViz::test_plot_distribution_no_crash        PASSED
 TestViz::test_plot_dashboard_no_crash           PASSED
+TestRegimeVolTiming::test_regime_vol_timing_signal  PASSED
+TestRegimeVolTiming::test_regime_modulation_differs PASSED
+TestRegimeVolTiming::test_leverage_cap_regime   PASSED
+TestCointegrationValidator::test_cointegrated_pair_passes PASSED
+TestCointegrationValidator::test_independent_pair_rejected PASSED
+TestCointegrationValidator::test_report_fields  PASSED
+TestWalkForward::test_walk_forward_vol_timing   PASSED
+TestWalkForward::test_walk_forward_pair_trading PASSED
+TestWalkForward::test_insufficient_data_returns_empty PASSED
+TestWalkForward::test_sharpe_decay_ratio        PASSED
 
-======================== 27 passed in 2.58s =========================
+======================== 37 passed in 5.42s =========================
 ```
 
 ---
