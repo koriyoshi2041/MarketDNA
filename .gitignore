@@ -30,5 +30,8 @@ Thumbs.db
 # Claude
 .claude/
 
+# Personal documents (do not commit)
+量化研究员准备_综合报告.md
+
 # Jupyter
 .ipynb_checkpoints/
